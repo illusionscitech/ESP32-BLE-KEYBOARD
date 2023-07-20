@@ -19,6 +19,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 BleKeyboard bleKeyboard;
 ESP32Encoder encoder;
 
+#define BUTTON_PIN_BITMASK 0x8000 // 2^14 in hex  深度睡眠唤醒pin
+RTC_DATA_ATTR int bootCount = 0;
+
 int comment = 0;
 //按键配置
 #define EC11_A_PIN 25  //旋转编码器
@@ -34,6 +37,8 @@ int comment = 0;
 uint8_t up[3]={0};
 uint8_t enablelock=0;
 int lastEncoderValue = 0;
+uint32_t new_time = 0;
+uint32_t time1 = 0;
 
 Adafruit_NeoPixel strip(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -137,7 +142,7 @@ void Breathe_all(uint8_t LED_NUM){
   }
 
 
-void words_display()
+void display_Connected(uint32_t new_time)
 {
   // 清除屏幕
   display.clearDisplay();
@@ -155,18 +160,79 @@ void words_display()
   display.setCursor(0, 10);
   display.print("Run time: ");
   //打印自开发板重置以来的秒数：
-  display.print(millis() / 1000);
+  display.print(new_time / 1000);
   display.print(" s");
+  display.display();
+  if (new_time>30000)  //300s休眠
+  {
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_15,0); //1 = High, 0 = Low
 
-//  display.setCursor(0, 20);
-//  display.print("Author: ");
-//  display.print("Nick");
-//  display.print("Author: ");
-//  display.print("Nick");
-//  
-//  display.setCursor(0, 30);
-//  display.print("Author: ");
-//  display.print("Nick");
+    //If you were to use ext1, you would use it like
+    //esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK,ESP_EXT1_WAKEUP_ANY_HIGH);
+  
+    //Go to sleep now
+    display.clearDisplay();
+    display.display();
+    Serial.println("Going to sleep now");
+     //设置光标位置
+    // 清除屏幕
+    
+    esp_deep_sleep_start();
+    Serial.println("This will never be printed");
+  }
+}
+
+void  display_noConnected(uint32_t new_time)
+{
+    //设置光标位置
+    // 清除屏幕
+  display.clearDisplay();
+
+  // 设置字体颜色,白色可见
+  display.setTextColor(WHITE);
+
+  //设置字体大小
+  display.setTextSize(1.5);
+  
+  display.setCursor(0, 0);
+  display.print("Bluetooth not connected");
+  display.display();
+  if (new_time>10000)      //无连接30s休眠
+  {
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_15,0); //1 = High, 0 = Low
+
+    //If you were to use ext1, you would use it like
+    //esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK,ESP_EXT1_WAKEUP_ANY_HIGH);
+  
+    //Go to sleep now
+    display.clearDisplay();
+    display.display();
+    Serial.println("Going to sleep now");
+     //设置光标位置
+    // 清除屏幕
+    
+    esp_deep_sleep_start();
+    Serial.println("This will never be printed");
+  }
+}
+/*
+Method to print the reason by which ESP32
+has been awaken from sleep
+*/
+void print_wakeup_reason(){
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch(wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+  }
 }
 
 void setup() {
@@ -189,27 +255,27 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   
   bleKeyboard.begin();
+
+  //Increment boot number and print it every reboot
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount));
+
+  //Print the wakeup reason for ESP32
+  print_wakeup_reason();
+//  new_time=millis();
+//  new_time = millis()-time1;
 }
 
 void loop() {
+
+  new_time = millis()-time1;
+//  Serial.println(new_time);
   if(bleKeyboard.isConnected()) {
-    words_display();
-    display.display();
+    display_Connected(new_time);
+    
   }
   else{
-    //设置光标位置
-    // 清除屏幕
-  display.clearDisplay();
-
-  // 设置字体颜色,白色可见
-  display.setTextColor(WHITE);
-
-  //设置字体大小
-  display.setTextSize(1.5);
-  
-  display.setCursor(0, 0);
-  display.print("Bluetooth not connected");
-  display.display();
+    display_noConnected(new_time);
   }
   if (digitalRead(KEY1) == LOW)
   {
@@ -224,6 +290,7 @@ void loop() {
           display.print("key1");
           display.display();
           LED[2].enable=1;
+          time1=millis();
       }
     }
     while (digitalRead(KEY1) == LOW)
@@ -242,6 +309,7 @@ void loop() {
           display.print("key2");
           display.display();
           LED[1].enable=1;
+          time1=millis();
       }
     }
     while (digitalRead(KEY2) == LOW)
@@ -260,6 +328,7 @@ void loop() {
           display.print("key3");
           display.display();
           LED[0].enable=1;
+          time1=millis();
       }
     }
     while (digitalRead(KEY3) == LOW)
@@ -277,6 +346,7 @@ void loop() {
         display.setCursor(75, 20);
         display.print("↓");
         display.display();
+        time1=millis();
       }
       else
       {
@@ -284,6 +354,7 @@ void loop() {
         display.setCursor(75, 20);
         display.print("↑");
         display.display();
+        time1=millis();
       }
     }
     lastEncoderValue = now_count;
@@ -300,6 +371,7 @@ void loop() {
       {
 //        bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
           bleKeyboard.write(48);
+          time1=millis();
       }
     }
     while (digitalRead(EC11_K_PIN) == LOW)
@@ -318,67 +390,6 @@ void loop() {
    }
    lasttime[1]=millis();
   }  
-//  if(bleKeyboard.isConnected()) {
-//    words_display();
-//    display.display();
-//    
-//    //if the button is pressed
-//    if (digitalRead(KEY1) == LOW) {
-//      //Send an ASCII '0',
-//      
-//      bleKeyboard.write(48);
-//      delay(300);
-//      Serial.println("0");
-//      display.setCursor(0, 20);
-//      display.print("key1");
-//      display.display();
-//    }
-//   bleKeyboard.setDelay(10);//设置每个按键事件之间的延迟
-//   if (digitalRead(KEY2) == LOW) {
-//     //Send an ASCII '1',
-//     bleKeyboard.write(49);
-//     delay(300);
-//     display.setCursor(25, 20);
-//     display.print("key2");
-//     display.display();
-//   }
-//   bleKeyboard.setDelay(10);//设置每个按键事件之间的延迟
-//   if (digitalRead(KEY3) == LOW) {
-//     //Send an ASCII '2',
-//     bleKeyboard.write(50);
-//     delay(300);
-//     display.setCursor(50, 20);
-//     display.print("key3");
-//     display.display();
-//   }
 
-
-   //
-   // Below is an example of pressing multiple keyboard modifiers 
-   // which by default is commented out.
-    /*
-    Serial.println("Sending Ctrl+Alt+Delete...");
-    bleKeyboard.press(KEY_LEFT_CTRL);
-    bleKeyboard.press(KEY_LEFT_ALT);
-    bleKeyboard.press(KEY_DELETE);
-    delay(100);
-    bleKeyboard.releaseAll();
-    */
-//  }
-//  else{
-//    //设置光标位置
-//    // 清除屏幕
-//  display.clearDisplay();
-//
-//  // 设置字体颜色,白色可见
-//  display.setTextColor(WHITE);
-//
-//  //设置字体大小
-//  display.setTextSize(1.5);
-//  
-//  display.setCursor(0, 0);
-//  display.print("Bluetooth not connected");
-//  display.display();
-//  }
 
 }
