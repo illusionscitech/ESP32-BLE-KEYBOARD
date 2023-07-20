@@ -22,6 +22,14 @@ ESP32Encoder encoder;
 #define BUTTON_PIN_BITMASK 0x8000 // 2^14 in hex  深度睡眠唤醒pin
 RTC_DATA_ATTR int bootCount = 0;
 
+//触摸唤醒
+#if CONFIG_IDF_TARGET_ESP32
+  #define THRESHOLD   40      /* Greater the value, more the sensitivity */
+#else //ESP32-S2 and ESP32-S3 + default for other chips (to be adjusted) */
+  #define THRESHOLD   5000   /* Lower the value, more the sensitivity */
+#endif
+touch_pad_t touchPin;
+
 int comment = 0;
 //按键配置
 #define EC11_A_PIN 25  //旋转编码器
@@ -166,6 +174,8 @@ void display_Connected(uint32_t new_time)
   if (new_time>30000)  //300s休眠
   {
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_15,0); //1 = High, 0 = Low
+//    touchSleepWakeUpEnable(T2,THRESHOLD);
+//    touchSleepWakeUpEnable(T9,THRESHOLD);
 
     //If you were to use ext1, you would use it like
     //esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK,ESP_EXT1_WAKEUP_ANY_HIGH);
@@ -200,6 +210,8 @@ void  display_noConnected(uint32_t new_time)
   if (new_time>10000)      //无连接30s休眠
   {
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_15,0); //1 = High, 0 = Low
+//    touchSleepWakeUpEnable(T2,THRESHOLD);
+//    touchSleepWakeUpEnable(T9,THRESHOLD);
 
     //If you were to use ext1, you would use it like
     //esp_sleep_enable_ext1_wakeup(BUTTON_PIN_BITMASK,ESP_EXT1_WAKEUP_ANY_HIGH);
@@ -235,6 +247,40 @@ void print_wakeup_reason(){
   }
 }
 
+/*
+Method to print the touchpad by which ESP32
+has been awaken from sleep
+*/
+void print_wakeup_touchpad(){
+  touchPin = esp_sleep_get_touchpad_wakeup_status();
+
+  #if CONFIG_IDF_TARGET_ESP32
+    switch(touchPin)
+    {
+      case 0  : Serial.println("Touch detected on GPIO 4"); break;
+      case 1  : Serial.println("Touch detected on GPIO 0"); break;
+      case 2  : Serial.println("Touch detected on GPIO 2"); break;
+      case 3  : Serial.println("Touch detected on GPIO 15"); break;
+      case 4  : Serial.println("Touch detected on GPIO 13"); break;
+      case 5  : Serial.println("Touch detected on GPIO 12"); break;
+      case 6  : Serial.println("Touch detected on GPIO 14"); break;
+      case 7  : Serial.println("Touch detected on GPIO 27"); break;
+      case 8  : Serial.println("Touch detected on GPIO 33"); break;
+      case 9  : Serial.println("Touch detected on GPIO 32"); break;
+      default : Serial.println("Wakeup not by touchpad"); break;
+    }
+  #else
+    if(touchPin < TOUCH_PAD_MAX)
+    {
+      Serial.printf("Touch detected on GPIO %d\n", touchPin); 
+    }
+    else
+    {
+      Serial.println("Wakeup not by touchpad");
+    }
+  #endif
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Starting BLE work!");
@@ -262,8 +308,16 @@ void setup() {
 
   //Print the wakeup reason for ESP32
   print_wakeup_reason();
-//  new_time=millis();
-//  new_time = millis()-time1;
+  print_wakeup_touchpad();
+//  #if CONFIG_IDF_TARGET_ESP32 
+//  //Setup sleep wakeup on Touch Pad 2 + 9 (GPIO2 + GPIO 32) 
+//  touchSleepWakeUpEnable(T2,THRESHOLD);
+//  touchSleepWakeUpEnable(T9,THRESHOLD);1
+//  #else //ESP32-S2 + ESP32-S3
+//  //Setup sleep wakeup on Touch Pad 3 (GPIO3) 
+//  touchSleepWakeUpEnable(T3,THRESHOLD);
+//
+//  #endif
 }
 
 void loop() {
