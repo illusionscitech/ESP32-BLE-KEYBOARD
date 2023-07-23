@@ -1,6 +1,7 @@
 /**
  * This example turns the ESP32 into a Bluetooth LE keyboard that writes the words, presses Enter, presses a media key and then Ctrl+Alt+Delete
  */
+#include <SPI.h>
 #include <ESP32Encoder.h>
 #include <BleKeyboard.h>
 #include <Adafruit_NeoPixel.h>
@@ -148,7 +149,55 @@ void Breathe_all(uint8_t LED_NUM){
   for(int i=0;i<3;i++)  strip.setPixelColor(i,LED[LED_NUM].r, LED[LED_NUM].g,LED[LED_NUM].b);
 
   }
+/*******oled部分*********/
+#define LOGO_HEIGHT   32
+#define LOGO_WIDTH    32
+static const unsigned char PROGMEM logo_bmp[] =
+{ 0x00,0x07,0x80,0x00,0x00,0x07,0xE0,0x00,0x00,0x07,0xF0,0x00,0x00,0x07,0xF8,0x00,
+0x00,0x07,0xFC,0x00,0x00,0x07,0xFF,0x00,0x00,0x07,0xFF,0x80,0x00,0x07,0xBF,0xC0,
+0x01,0x07,0xDF,0xE0,0x07,0xC7,0xCF,0xE0,0x07,0xE7,0x9F,0xE0,0x07,0xFF,0xFF,0xC0,
+0x03,0xFF,0xFF,0x00,0x01,0xFF,0xFE,0x00,0x00,0x7F,0xF8,0x00,0x00,0x3F,0xF0,0x00,
+0x00,0x3F,0xF0,0x00,0x00,0x7F,0xFC,0x00,0x01,0xFF,0xFE,0x00,0x03,0xFF,0xFF,0x00,
+0x07,0xFF,0xFF,0xC0,0x07,0xE7,0x9F,0xE0,0x07,0xC7,0xCF,0xE0,0x01,0x07,0xDF,0xE0,
+0x00,0x07,0xBF,0xC0,0x00,0x07,0xFF,0x80,0x00,0x07,0xFF,0x00,0x00,0x07,0xFC,0x00,
+0x00,0x07,0xF8,0x00,0x00,0x07,0xF0,0x00,0x00,0x07,0xE0,0x00,0x00,0x07,0x80,0x00 };
 
+
+void inittestscrolltext(void) {
+  display.clearDisplay();
+
+  display.drawBitmap(
+    0,0,logo_bmp, LOGO_WIDTH, LOGO_HEIGHT, 1);
+  display.display();
+  delay(1000);
+
+  display.setTextSize(1.7); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(32, 0);
+  display.println(F("BLE KEYBOARD"));
+  display.setTextSize(1); // Draw 2X-scale text
+  display.setTextColor(BLACK, WHITE);
+  display.setCursor(32, 17);
+  display.println(F("By GEEKDREAM"));
+  display.display();      // Show initial text
+  delay(100);
+
+  // Scroll in various directions, pausing in-between:
+  display.startscrollright(0x00, 0x0F);
+  delay(800);
+  display.stopscroll();
+  delay(1000);
+  display.startscrollleft(0x00, 0x0F);
+  delay(800);
+  display.stopscroll();
+//  delay(1000);
+//  display.startscrolldiagright(0x00, 0x07);
+//  delay(2000);
+//  display.startscrolldiagleft(0x00, 0x07);
+//  delay(2000);
+//  display.stopscroll();
+  delay(1000);
+}
 
 void display_Connected(uint32_t new_time)
 {
@@ -301,6 +350,7 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   
   bleKeyboard.begin();
+  inittestscrolltext();//初始化显示logo单元
 
   //Increment boot number and print it every reboot
   ++bootCount;
@@ -309,15 +359,7 @@ void setup() {
   //Print the wakeup reason for ESP32
   print_wakeup_reason();
   print_wakeup_touchpad();
-//  #if CONFIG_IDF_TARGET_ESP32 
-//  //Setup sleep wakeup on Touch Pad 2 + 9 (GPIO2 + GPIO 32) 
-//  touchSleepWakeUpEnable(T2,THRESHOLD);
-//  touchSleepWakeUpEnable(T9,THRESHOLD);1
-//  #else //ESP32-S2 + ESP32-S3
-//  //Setup sleep wakeup on Touch Pad 3 (GPIO3) 
-//  touchSleepWakeUpEnable(T3,THRESHOLD);
-//
-//  #endif
+
 }
 
 void loop() {
